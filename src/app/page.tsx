@@ -28,7 +28,7 @@ export default function Page() {
             <li>Engineering team building and leadership</li>
             <li>Product development lifecycle oversight</li>
             <li>Go-to-market technical planning</li>
-            <li>Fractional CTO/COO advisory for early-stage startups</li>
+            <li>Advisory for early-stage startups</li>
           </ul>
         </div>
 
