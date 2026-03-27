@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Exposure';
-  src: url('https://particle-globe-two.vercel.app/fonts/Exposure-205TF-VAR.woff2') format('woff2');
+  src: url('/fonts/Exposure-205TF-VAR.woff2') format('woff2');
   font-weight: 100 900;
   font-display: swap;
 }
