@@ -2,10 +2,6 @@
 
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 
 // ---------------------------------------------------------------------------
 // CONFIG
@@ -14,12 +10,9 @@ const PARTICLE_COUNT_DESKTOP = 30000
 const PARTICLE_COUNT_MOBILE = 12000
 const MORPH_DURATION = 2.2
 const HOLD_DURATION = 4.0
-const BLOOM_STRENGTH = 0.9
-const BLOOM_RADIUS = 0.5
-const BLOOM_THRESHOLD = 0.2
-const MOUSE_RADIUS_WORLD = 0.7
-const MOUSE_STRENGTH_WORLD = 0.5
-const BASE_PARTICLE_SIZE = 2.5
+const MOUSE_RADIUS_WORLD = 1.2
+const MOUSE_STRENGTH_WORLD = 0.4
+const BASE_PARTICLE_SIZE = 2.0
 
 // ---------------------------------------------------------------------------
 // EASING
@@ -385,29 +378,34 @@ const vertexShader = /* glsl */ `
       sin(t * 0.4 + aRandom.z * 10.0) * 0.018
     );
 
-    // World-space mouse repulsion with swirl + velocity
+    // World-space mouse repulsion — very gradual falloff, no visible edge
     vec3 toParticle = mixedPosition - uMouseWorld;
     float dist = length(toParticle);
-    float influence = 1.0 - smoothstep(0.0, uMouseRadius, dist);
-    influence = influence * influence * (3.0 - 2.0 * influence);
+    // Exponential falloff — no hard boundary, influence fades gradually
+    float influence = exp(-dist * dist / (uMouseRadius * uMouseRadius * 0.5));
+    influence = max(influence - 0.01, 0.0); // cut off tiny residuals
 
     if (dist > 0.001 && influence > 0.0) {
-      float velocityBoost = 1.0 + length(uMouseVelocity) * 2.5;
+      float velocityBoost = 1.0 + length(uMouseVelocity) * 2.0;
       vec3 pushDir = normalize(toParticle);
-      // Perpendicular swirl
       vec3 swirlDir = vec3(-pushDir.y, pushDir.x, 0.0);
-      float swirl = sin(aRandom.x * 6.28 + uTime * 2.0) * 0.35;
+      float swirl = sin(aRandom.x * 6.28 + uTime * 2.0) * 0.25;
       vec3 totalPush = pushDir + swirlDir * swirl;
       totalPush = normalize(totalPush) * influence * uMouseStrength * velocityBoost;
       mixedPosition += totalPush;
-      mixedPosition.z += influence * uMouseStrength * 0.3;
     }
 
     vec4 mvPosition = modelViewMatrix * vec4(mixedPosition, 1.0);
     gl_Position = projectionMatrix * mvPosition;
-    gl_PointSize = uSize * aSize * uPixelRatio * (1.0 / -mvPosition.z);
 
-    vAlpha = 0.88 - explosionProgress * 0.25;
+    // Depth-based sizing and alpha (like particle-globe)
+    float depthFactor = 1.0 / -mvPosition.z;
+    gl_PointSize = uSize * aSize * uPixelRatio * depthFactor;
+
+    // Depth-based alpha: front particles brighter, back particles dimmer
+    float depthAlpha = clamp((-mvPosition.z - 3.0) / 4.0, 0.0, 1.0);
+    float baseAlpha = 0.25 + depthAlpha * 0.65;
+    vAlpha = baseAlpha * (0.88 - explosionProgress * 0.25);
   }
 `
 
@@ -417,20 +415,14 @@ const fragmentShader = /* glsl */ `
   void main() {
     float dist = length(gl_PointCoord - vec2(0.5));
 
-    // Bright pinpoint core
-    float core = 1.0 - smoothstep(0.0, 0.15, dist);
+    // Clean circular dot with soft edge — like particle-globe style
+    float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
 
-    // Soft exponential glow halo
-    float glow = exp(-dist * 5.5) * 0.6;
+    // Discard fully transparent pixels
+    if (alpha < 0.01) discard;
 
-    float alpha = core + glow;
-
-    // White core, subtle cool blue glow
-    vec3 coreColor = vec3(1.0, 1.0, 1.0);
-    vec3 glowColor = vec3(0.85, 0.92, 1.0);
-    vec3 color = mix(glowColor, coreColor, core);
-
-    gl_FragColor = vec4(color, alpha * vAlpha);
+    // Pure white
+    gl_FragColor = vec4(1.0, 1.0, 1.0, alpha * vAlpha);
   }
 `
 
@@ -458,17 +450,7 @@ export default function ParticleMorph() {
     renderer.setSize(container.clientWidth, container.clientHeight)
     container.appendChild(renderer.domElement)
 
-    // --- Post-processing ---
-    const composer = new EffectComposer(renderer)
-    composer.addPass(new RenderPass(scene, camera))
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(container.clientWidth, container.clientHeight),
-      BLOOM_STRENGTH,
-      BLOOM_RADIUS,
-      BLOOM_THRESHOLD
-    )
-    composer.addPass(bloomPass)
-    composer.addPass(new OutputPass())
+    // No post-processing — clean crisp particles like particle-globe
 
     // --- Shapes ---
     const shape1 = generateLightbulb(PARTICLE_COUNT)
@@ -589,8 +571,6 @@ export default function ParticleMorph() {
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       renderer.setSize(w, h)
-      composer.setSize(w, h)
-      bloomPass.resolution.set(w, h)
       uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2)
     }
     window.addEventListener('resize', onResize)
@@ -654,7 +634,7 @@ export default function ParticleMorph() {
         }
       }
 
-      composer.render()
+      renderer.render(scene, camera)
     }
 
     animate()
@@ -669,7 +649,6 @@ export default function ParticleMorph() {
       geometry.dispose()
       material.dispose()
       renderer.dispose()
-      composer.dispose()
       if (renderer.domElement.parentElement) {
         renderer.domElement.parentElement.removeChild(renderer.domElement)
       }
