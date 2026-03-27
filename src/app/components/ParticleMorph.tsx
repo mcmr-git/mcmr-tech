@@ -17,8 +17,8 @@ const HOLD_DURATION = 4.0
 const BLOOM_STRENGTH = 1.1
 const BLOOM_RADIUS = 0.45
 const BLOOM_THRESHOLD = 0.08
-const MOUSE_RADIUS_WORLD = 1.4
-const MOUSE_STRENGTH_WORLD = 0.9
+const MOUSE_RADIUS_WORLD = 0.6
+const MOUSE_STRENGTH_WORLD = 0.45
 const BASE_PARTICLE_SIZE = 2.2
 
 // ---------------------------------------------------------------------------
@@ -95,45 +95,72 @@ function generateLightbulb(count: number): Float32Array {
 
 function generateLaptop(count: number): Float32Array {
   const positions = new Float32Array(count * 3)
-  const screenCount = Math.floor(count * 0.45)
-  const baseCount = Math.floor(count * 0.45)
-  const hingeCount = count - screenCount - baseCount
+  // Open laptop seen from slight 3/4 angle
+  // Screen: rectangle standing upright, tilted back slightly
+  // Base: rectangle lying flat below, connected at hinge
+  const screenCount = Math.floor(count * 0.42)
+  const screenBezelCount = Math.floor(count * 0.08)
+  const baseCount = Math.floor(count * 0.38)
+  const baseDetailCount = Math.floor(count * 0.05)
+  const hingeCount = count - screenCount - screenBezelCount - baseCount - baseDetailCount
   let idx = 0
 
-  const screenAngle = (110 * Math.PI) / 180
+  const sw = 2.6  // screen width
+  const sh = 1.8  // screen height
+  const tilt = 0.25 // slight backward tilt (radians)
+  const hingeY = -0.6 // where screen meets base
+
+  // Screen face — upright rectangle tilted back
   for (let i = 0; i < screenCount; i++) {
-    const edgeBias = Math.random() < 0.28
+    const u = (Math.random() - 0.5) * sw
+    const v = Math.random() * sh // 0 = bottom (hinge), 1 = top
+    positions[idx++] = u
+    positions[idx++] = hingeY + v * Math.cos(tilt)
+    positions[idx++] = -v * Math.sin(tilt) + (Math.random() - 0.5) * 0.02
+  }
+
+  // Screen bezel (denser edges)
+  for (let i = 0; i < screenBezelCount; i++) {
+    const side = Math.floor(Math.random() * 4)
     let u: number, v: number
-    if (edgeBias) {
-      const side = Math.floor(Math.random() * 4)
-      if (side === 0) { u = -1.45 + Math.random() * 0.1; v = (Math.random() - 0.5) * 2.0 }
-      else if (side === 1) { u = 1.45 - Math.random() * 0.1; v = (Math.random() - 0.5) * 2.0 }
-      else if (side === 2) { u = (Math.random() - 0.5) * 3.0; v = -0.95 + Math.random() * 0.1 }
-      else { u = (Math.random() - 0.5) * 3.0; v = 0.95 - Math.random() * 0.1 }
-    } else {
-      u = (Math.random() - 0.5) * 3.0
-      v = (Math.random() - 0.5) * 2.0
-    }
+    if (side === 0) { u = -sw / 2 + (Math.random() - 0.5) * 0.06; v = Math.random() * sh }
+    else if (side === 1) { u = sw / 2 + (Math.random() - 0.5) * 0.06; v = Math.random() * sh }
+    else if (side === 2) { u = (Math.random() - 0.5) * sw; v = sh + (Math.random() - 0.5) * 0.06 }
+    else { u = (Math.random() - 0.5) * sw; v = (Math.random() - 0.5) * 0.06 }
     positions[idx++] = u
-    positions[idx++] = v * Math.cos(screenAngle) + 0.8
-    positions[idx++] = v * Math.sin(screenAngle) * 0.14
+    positions[idx++] = hingeY + v * Math.cos(tilt)
+    positions[idx++] = -v * Math.sin(tilt) + (Math.random() - 0.5) * 0.02
   }
 
+  // Base/keyboard — flat rectangle extending forward from hinge
+  const bw = 2.8  // base width (slightly wider)
+  const bd = 1.7  // base depth
   for (let i = 0; i < baseCount; i++) {
-    const u = (Math.random() - 0.5) * 3.0
-    const v = Math.random() * 2.0
+    const u = (Math.random() - 0.5) * bw
+    const v = Math.random() * bd
     positions[idx++] = u
-    positions[idx++] = -0.88 + (Math.random() - 0.5) * 0.04
-    positions[idx++] = v * 0.14
+    positions[idx++] = hingeY - 0.03 // sits just below hinge
+    positions[idx++] = v * 0.4 + (Math.random() - 0.5) * 0.02
   }
 
+  // Keyboard keys / trackpad detail (subtle density variation on base)
+  for (let i = 0; i < baseDetailCount; i++) {
+    // Trackpad area (center of base)
+    const u = (Math.random() - 0.5) * 0.8
+    const v = 0.3 + Math.random() * 0.5
+    positions[idx++] = u
+    positions[idx++] = hingeY - 0.03
+    positions[idx++] = v * 0.4 + (Math.random() - 0.5) * 0.01
+  }
+
+  // Hinge — cylinder connecting screen to base
   for (let i = 0; i < hingeCount; i++) {
-    const angle = Math.random() * Math.PI * 2
-    const r = 0.07
-    const x = (Math.random() - 0.5) * 2.8
+    const angle = Math.random() * Math.PI
+    const r = 0.06
+    const x = (Math.random() - 0.5) * sw * 0.9
     positions[idx++] = x
-    positions[idx++] = -0.84 + r * Math.cos(angle)
-    positions[idx++] = r * Math.sin(angle) * 0.14
+    positions[idx++] = hingeY + r * Math.sin(angle)
+    positions[idx++] = r * Math.cos(angle) * 0.3
   }
 
   return positions
@@ -184,33 +211,61 @@ function generateEarth(count: number): Float32Array {
 
 function generateDollarSign(count: number): Float32Array {
   const positions = new Float32Array(count * 3)
-  const sCurveCount = Math.floor(count * 0.75)
+  // Build a proper $ from a bezier S-curve + two vertical lines
+  const sCurveCount = Math.floor(count * 0.72)
   const barCount = count - sCurveCount
   let idx = 0
 
+  const scale = 1.6
+
+  // Sample the S-curve of a dollar sign using cubic bezier segments
+  // Top curve: starts right, curves left (like top of S)
+  // Bottom curve: starts left, curves right (like bottom of S)
   for (let i = 0; i < sCurveCount; i++) {
     const t = i / sCurveCount
     let x: number, y: number
-    if (t < 0.5) {
-      const angle = Math.PI * 0.1 + (t * 2) * Math.PI * 0.8
-      x = -Math.cos(angle) * 0.9
-      y = Math.sin(angle) * 0.7 + 0.7
+
+    if (t < 0.08) {
+      // Top horizontal serif
+      const lt = t / 0.08
+      x = 0.1 + lt * 0.55
+      y = 1.2
+    } else if (t < 0.54) {
+      // Top half of S: arc from top-right to center-left
+      const lt = (t - 0.08) / 0.46
+      const angle = -Math.PI * 0.15 + lt * Math.PI * 1.15
+      x = Math.cos(angle) * 0.7
+      y = Math.sin(angle) * 0.55 + 0.6
+    } else if (t < 0.92) {
+      // Bottom half of S: arc from center-right to bottom-left (reversed)
+      const lt = (t - 0.54) / 0.38
+      const angle = Math.PI * 0.15 + lt * Math.PI * 1.0
+      x = -Math.cos(angle) * 0.7
+      y = -Math.sin(angle) * 0.55 - 0.6
     } else {
-      const angle = Math.PI * 0.1 + ((t - 0.5) * 2) * Math.PI * 0.8
-      x = Math.cos(angle) * 0.9
-      y = -Math.sin(angle) * 0.7 - 0.7
+      // Bottom horizontal serif
+      const lt = (t - 0.92) / 0.08
+      x = -0.1 - lt * 0.55
+      y = -1.2
     }
-    positions[idx++] = x + (Math.random() - 0.5) * 0.18
-    positions[idx++] = y + (Math.random() - 0.5) * 0.18
-    positions[idx++] = (Math.random() - 0.5) * 0.08
+
+    // Add thickness perpendicular to the curve
+    const thickness = 0.13
+    const px = (Math.random() - 0.5) * thickness * 2
+    const py = (Math.random() - 0.5) * thickness * 2
+
+    positions[idx++] = (x + px) * scale
+    positions[idx++] = (y + py) * scale
+    positions[idx++] = (Math.random() - 0.5) * 0.06
   }
 
+  // Vertical bar through the center
   for (let i = 0; i < barCount; i++) {
     const t = i / barCount
-    const y = -1.8 + t * 3.6
-    positions[idx++] = (Math.random() - 0.5) * 0.1
-    positions[idx++] = y
-    positions[idx++] = (Math.random() - 0.5) * 0.06
+    const y = -1.6 + t * 3.2
+    positions[idx++] = (Math.random() - 0.5) * 0.08 * scale
+    positions[idx++] = y * scale
+    positions[idx++] = (Math.random() - 0.5) * 0.04
   }
 
   return positions
@@ -292,8 +347,8 @@ const vertexShader = /* glsl */ `
     vec4 mvPosition = modelViewMatrix * vec4(mixedPosition, 1.0);
     gl_Position = projectionMatrix * mvPosition;
 
-    // Size: base + slight mouse-proximity enlargement
-    float sizeBoost = 1.0 + vMouseProximity * 0.6;
+    // Size: minimal mouse-proximity boost
+    float sizeBoost = 1.0 + vMouseProximity * 0.15;
     gl_PointSize = uSize * aSize * uPixelRatio * sizeBoost * (1.0 / -mvPosition.z);
 
     vAlpha = 0.88 - explosionProgress * 0.25;
@@ -309,9 +364,9 @@ const fragmentShader = /* glsl */ `
     float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
     alpha = pow(alpha, 1.4);
 
-    // Slight warm tint near mouse for premium feel
-    float warmth = vMouseProximity * 0.15;
-    vec3 color = vec3(1.0, 1.0 - warmth * 0.3, 1.0 - warmth * 0.6);
+    // Subtle warm tint near mouse
+    float warmth = vMouseProximity * 0.08;
+    vec3 color = vec3(1.0, 1.0 - warmth * 0.2, 1.0 - warmth * 0.4);
 
     gl_FragColor = vec4(color, alpha * vAlpha);
   }
