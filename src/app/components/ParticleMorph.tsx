@@ -209,6 +209,11 @@ function generateEarth(count: number): Float32Array {
   return positions
 }
 
+function cubicBezier(t: number, p0: number, p1: number, p2: number, p3: number) {
+  const mt = 1 - t
+  return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3
+}
+
 function generateDollarSign(count: number): Float32Array {
   const positions = new Float32Array(count * 3)
   const sCurveCount = Math.floor(count * 0.7)
@@ -217,21 +222,35 @@ function generateDollarSign(count: number): Float32Array {
 
   const scale = 1.3
 
-  // Clean S-curve using sine: x oscillates as y sweeps top-to-bottom
-  // -sin gives: top goes LEFT, bottom goes RIGHT = correct $ orientation
+  // Cubic bezier S-curve — two halves connected at center
+  // Top half: upper-right → curves left → center
+  // Bottom half: center → curves right → lower-left
   for (let i = 0; i < sCurveCount; i++) {
-    const t = i / sCurveCount // 0 (top) → 1 (bottom)
+    const t = i / sCurveCount
+    let x: number, y: number
 
-    // y: linear top to bottom
-    const y = 1.3 - t * 2.6
+    if (t < 0.5) {
+      // Top half of S
+      const lt = t * 2 // 0→1
+      // Start: (0.6, 1.1) top-right
+      // Control 1: (-1.0, 1.0) pulls hard left at top
+      // Control 2: (-1.0, 0.0) keeps it curved on left
+      // End: (0.0, 0.0) center crossing
+      x = cubicBezier(lt, 0.6, -1.0, -1.0, 0.0)
+      y = cubicBezier(lt, 1.1, 1.0, 0.0, 0.0)
+    } else {
+      // Bottom half of S
+      const lt = (t - 0.5) * 2 // 0→1
+      // Start: (0.0, 0.0) center crossing
+      // Control 1: (1.0, 0.0) pulls hard right at middle
+      // Control 2: (1.0, -1.0) keeps it curved on right
+      // End: (-0.6, -1.1) bottom-left
+      x = cubicBezier(lt, 0.0, 1.0, 1.0, -0.6)
+      y = cubicBezier(lt, 0.0, 0.0, -1.0, -1.1)
+    }
 
-    // x: sine wave creates the S shape
-    // Wider at the bulges, narrower at crossing
-    const x = -Math.sin(t * Math.PI * 2) * 0.85
-
-    // Vary thickness along the curve — thicker at the bulges
-    const bulge = Math.abs(Math.sin(t * Math.PI * 2))
-    const thickness = 0.08 + bulge * 0.1
+    // Thickness
+    const thickness = 0.1
     const px = (Math.random() - 0.5) * thickness * 2
     const py = (Math.random() - 0.5) * thickness * 2
 
@@ -240,10 +259,10 @@ function generateDollarSign(count: number): Float32Array {
     positions[idx++] = (Math.random() - 0.5) * 0.05
   }
 
-  // Vertical bar through center — extends beyond S top and bottom
+  // Vertical bar through center
   for (let i = 0; i < barCount; i++) {
     const t = i / barCount
-    const y = -1.55 + t * 3.1
+    const y = -1.5 + t * 3.0
     positions[idx++] = (Math.random() - 0.5) * 0.07 * scale
     positions[idx++] = y * scale
     positions[idx++] = (Math.random() - 0.5) * 0.04
