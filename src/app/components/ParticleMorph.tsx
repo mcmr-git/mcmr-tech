@@ -211,59 +211,40 @@ function generateEarth(count: number): Float32Array {
 
 function generateDollarSign(count: number): Float32Array {
   const positions = new Float32Array(count * 3)
-  // Build a proper $ from a bezier S-curve + two vertical lines
-  const sCurveCount = Math.floor(count * 0.72)
+  const sCurveCount = Math.floor(count * 0.7)
   const barCount = count - sCurveCount
   let idx = 0
 
-  const scale = 1.6
+  const scale = 1.3
 
-  // Sample the S-curve of a dollar sign using cubic bezier segments
-  // Top curve: starts right, curves left (like top of S)
-  // Bottom curve: starts left, curves right (like bottom of S)
+  // Clean S-curve using sine: x oscillates as y sweeps top-to-bottom
+  // -sin gives: top goes LEFT, bottom goes RIGHT = correct $ orientation
   for (let i = 0; i < sCurveCount; i++) {
-    const t = i / sCurveCount
-    let x: number, y: number
+    const t = i / sCurveCount // 0 (top) → 1 (bottom)
 
-    if (t < 0.08) {
-      // Top horizontal serif
-      const lt = t / 0.08
-      x = 0.1 + lt * 0.55
-      y = 1.2
-    } else if (t < 0.54) {
-      // Top half of S: arc from top-right to center-left
-      const lt = (t - 0.08) / 0.46
-      const angle = -Math.PI * 0.15 + lt * Math.PI * 1.15
-      x = Math.cos(angle) * 0.7
-      y = Math.sin(angle) * 0.55 + 0.6
-    } else if (t < 0.92) {
-      // Bottom half of S: arc from center-right to bottom-left (reversed)
-      const lt = (t - 0.54) / 0.38
-      const angle = Math.PI * 0.15 + lt * Math.PI * 1.0
-      x = -Math.cos(angle) * 0.7
-      y = -Math.sin(angle) * 0.55 - 0.6
-    } else {
-      // Bottom horizontal serif
-      const lt = (t - 0.92) / 0.08
-      x = -0.1 - lt * 0.55
-      y = -1.2
-    }
+    // y: linear top to bottom
+    const y = 1.3 - t * 2.6
 
-    // Add thickness perpendicular to the curve
-    const thickness = 0.13
+    // x: sine wave creates the S shape
+    // Wider at the bulges, narrower at crossing
+    const x = -Math.sin(t * Math.PI * 2) * 0.85
+
+    // Vary thickness along the curve — thicker at the bulges
+    const bulge = Math.abs(Math.sin(t * Math.PI * 2))
+    const thickness = 0.08 + bulge * 0.1
     const px = (Math.random() - 0.5) * thickness * 2
     const py = (Math.random() - 0.5) * thickness * 2
 
     positions[idx++] = (x + px) * scale
     positions[idx++] = (y + py) * scale
-    positions[idx++] = (Math.random() - 0.5) * 0.06
+    positions[idx++] = (Math.random() - 0.5) * 0.05
   }
 
-  // Vertical bar through the center
+  // Vertical bar through center — extends beyond S top and bottom
   for (let i = 0; i < barCount; i++) {
     const t = i / barCount
-    const y = -1.6 + t * 3.2
-    positions[idx++] = (Math.random() - 0.5) * 0.08 * scale
+    const y = -1.55 + t * 3.1
+    positions[idx++] = (Math.random() - 0.5) * 0.07 * scale
     positions[idx++] = y * scale
     positions[idx++] = (Math.random() - 0.5) * 0.04
   }
