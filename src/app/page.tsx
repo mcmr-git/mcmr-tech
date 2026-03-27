@@ -41,6 +41,11 @@ export default function Page() {
           </ul>
         </div>
       </section>
+
+      <footer className={styles.footer}>
+        <p>michele@michele.it</p>
+        <p>Partita IVA: 14652630964</p>
+      </footer>
     </main>
   )
 }
